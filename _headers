@@ -1,0 +1,14 @@
+# Cloudflare response headers for the static assets Worker serving this site.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# This page is a links-only launcher: no scripts, no external images, no
+# forms. script-src is 'none' and connect-src/frame-src are 'none' to match —
+# tighten further only if the page ever grows real JS. style-src/font-src
+# allow Google Fonts (the only external resource actually loaded).
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), camera=(), microphone=()
+  Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; manifest-src 'none'; worker-src 'none'; frame-ancestors 'none'

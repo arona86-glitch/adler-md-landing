@@ -12,6 +12,12 @@
   --red-500:  #ef4444;
   --red-50:   #fef2f2;
   --red-100:  #fee2e2;
+  --green-600: #059669;
+  --green-50:  #ecfdf5;
+  --green-100: #d1fae5;
+  --purple-600: #7c3aed;
+  --purple-50:  #f5f3ff;
+  --purple-100: #ede9fe;
   --gray-50:  #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
@@ -168,6 +174,16 @@ body {
   color: var(--red-500);
 }
 
+.card-icon--green {
+  background: linear-gradient(135deg, var(--green-50) 0%, var(--green-100) 100%);
+  color: var(--green-600);
+}
+
+.card-icon--purple {
+  background: linear-gradient(135deg, var(--purple-50) 0%, var(--purple-100) 100%);
+  color: var(--purple-600);
+}
+
 /* Card body */
 .card-body {
   padding: 0 28px 20px;
@@ -277,6 +293,11 @@ body {
   gap: 6px;
   font-size: .78rem;
   color: var(--gray-400);
+}
+
+.footer-lock svg {
+  width: 14px;
+  height: 14px;
 }
 
 .footer-copy {
