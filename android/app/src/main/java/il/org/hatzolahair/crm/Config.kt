@@ -25,6 +25,7 @@ object Config {
         ".apple.com",
         ".microsoftonline.com",
         ".live.com",
+        ".adler-md.com", // the earlier domain; Clerk may still be configured on it
     )
 
     /**

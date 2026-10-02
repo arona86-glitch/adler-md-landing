@@ -412,10 +412,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Decides where a link goes. Returns true when the app handled it (WebView must not load it). */
-    private fun routeLink(uri: Uri, mainFrame: Boolean): Boolean {
+    private fun routeLink(uri: Uri, mainFrame: Boolean, userInitiated: Boolean = true): Boolean {
         return when (uri.scheme?.lowercase()) {
             "http", "https" -> {
-                if (Config.isInternal(uri)) {
+                if (Config.isInternal(uri) || (mainFrame && !userInitiated)) {
                     false
                 } else {
                     if (mainFrame) openExternally(uri)
@@ -471,7 +471,13 @@ class MainActivity : AppCompatActivity() {
 
     private inner class CrmWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-            routeLink(request.url, request.isForMainFrame)
+            // Redirects and script-driven navigations (the OAuth/sign-in chain) always stay in the
+            // WebView; only a deliberate tap on a link to an outside site leaves the app.
+            routeLink(
+                request.url,
+                request.isForMainFrame,
+                userInitiated = request.hasGesture() && !request.isRedirect,
+            )
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             mainFrameFailed = false
