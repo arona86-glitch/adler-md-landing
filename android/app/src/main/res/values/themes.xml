@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HatzolahAir" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/hai_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/hai_navy</item>
+        <item name="colorSurface">@color/hai_surface</item>
+        <item name="colorOnSurface">@color/hai_on_surface</item>
+        <item name="colorSurfaceVariant">@color/hai_surface_variant</item>
+        <item name="colorOutline">@color/hai_outline</item>
+        <item name="colorError">@color/hai_error</item>
+        <item name="android:windowBackground">@color/hai_surface</item>
+        <item name="android:statusBarColor">@color/hai_bar</item>
+        <item name="android:navigationBarColor">@color/hai_surface</item>
+    </style>
+
+    <style name="Theme.HatzolahAir.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/hai_navy</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.HatzolahAir</item>
+    </style>
+</resources>

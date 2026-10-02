@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="hai_navy">#0C1D3C</color>
+    <color name="hai_green">#91D100</color>
+    <color name="hai_blue">#2563EB</color>
+    <color name="hai_bar">#111827</color>
+    <color name="hai_surface">#FFFFFF</color>
+    <color name="hai_surface_variant">#F3F4F6</color>
+    <color name="hai_on_surface">#111827</color>
+    <color name="hai_muted">#6B7280</color>
+    <color name="hai_outline">#E5E7EB</color>
+    <color name="hai_error">#DC2626</color>
+    <color name="hai_icon_bg">#FFFFFF</color>
+    <color name="white">#FFFFFF</color>
+</resources>
