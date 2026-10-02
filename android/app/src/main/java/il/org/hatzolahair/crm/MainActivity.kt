@@ -44,6 +44,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import il.org.hatzolahair.crm.databinding.ActivityMainBinding
 import java.io.File
@@ -449,6 +451,10 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls = false
             // Google's sign-in refuses embedded WebViews; dropping the "wv" marker keeps it working.
             userAgentString = userAgentString.replace("; wv", "") + " HatzolahAirApp/${BuildConfig.VERSION_NAME}"
+        }
+        // Google refuses sign-in from embedded WebViews that announce the app via X-Requested-With.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            WebSettingsCompat.setRequestedWithHeaderOriginAllowList(web.settings, emptySet())
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
