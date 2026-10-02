@@ -452,7 +452,7 @@ class MainActivity : AppCompatActivity() {
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            setAcceptThirdPartyCookie(web, true)
+            setAcceptThirdPartyCookies(web, true)
         }
         web.addJavascriptInterface(DownloadBridge(), BRIDGE_NAME)
         web.setBackgroundColor(ContextCompat.getColor(this, R.color.hai_surface))
