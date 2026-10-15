@@ -1,199 +1,285 @@
-# Architecture overview (for Pinhas)
+# Hatzolah Air CRM — system overview for Pinhas
 
-Written from what is actually in this repository (`arona86-glitch/adler-md-landing`)
-as of 2026-10-15. Anything marked **[UNKNOWN – Aron to fill in]** is not visible from
-this repo and must be confirmed in the dashboards (Vercel / Neon / Cloudflare / Clerk)
-or in the CRM's own repo.
+Audience: a professional engineer joining the project. Goal: understand the whole
+system, know where the risks are, and be able to contribute safely from day one.
 
-> **Most important thing to know:** this repo does **not** contain the CRM's web
-> app or its API/database code. It contains (1) the public landing page and
-> (2) a native Android app that is a thin WebView around the live CRM. The CRM
-> itself lives in another repository (or deployment) that we need to locate and
-> document the same way. See "Open questions".
+Basis: I read the code of both repositories on 2026-10-15
+(`arona86-glitch/hatzolah-air-crm` at commit `7f174f2`, and
+`arona86-glitch/adler-md-landing`). I did **not** run the app, and I have no access
+to the Vercel, Neon, Clerk, Cloudflare or Google dashboards. Statements are tagged:
+
+- **[code]**: verified in the source today.
+- **[docs]**: stated in the repo's own docs (`ARCHITECTURE.md`, `PROJECT_STATE.md`,
+  `docs/*`), which may be stale (PROJECT_STATE was last verified 2026-08-30).
+- **[verify]**: cannot be known from code; check in the dashboard.
+
+The CRM repo already has good documentation. Read these first, in this order:
+`README.md` → `ARCHITECTURE.md` → `PROJECT_STATE.md` → `docs/*.md`. This file is the
+cross-repo map plus an independent security read; it does not replace them.
 
 ---
 
-## 1. The big picture
+## 1. The system at a glance
 
 ```
-                         ┌────────────────────────────┐
-  Browser / phone  ───►  │ adler-md.com  (this repo)  │  static landing page,
-                         │ Cloudflare Workers assets  │  links only, no JS
-                         └─────────────┬──────────────┘
-                                       │ links out to
-        ┌──────────────────┬───────────┴───────┬────────────────────┐
-        ▼                  ▼                   ▼                    ▼
- er.adler-md.com   notes.adler-md.com  app.hatzolahair.org.il   scheduler.adler-md.com
- ER Chart          Doctor Notes        Hatzolah Air CRM          ER Scheduler
- [UNKNOWN]         [UNKNOWN]           [UNKNOWN – separate repo]  [UNKNOWN]
-                                              ▲
-                                              │ HTTPS, loaded in a WebView
-                                  ┌───────────┴───────────┐
-                                  │ Android app (this repo)│
-                                  │ il.org.hatzolahair.crm │
-                                  └───────────────────────┘
+                       ┌────────────────────────┐
+ Public ─────────────► │ adler-md.com           │  Static landing page (repo: adler-md-landing)
+                       │ Cloudflare Workers     │  Links only, no JS, strict CSP
+                       └───────────┬────────────┘
+                                   │ links to
+   ┌───────────────┬───────────────┼───────────────────────┐
+   ▼               ▼               ▼                       ▼
+ er.adler-md.com  notes.adler-md.com  app.hatzolahair.org.il   scheduler.adler-md.com
+ (other apps,     (other apps,        THE CRM (repo:            (other apps,
+  not in scope)    not in scope)       hatzolah-air-crm)         not in scope)
+                                           ▲
+                          ┌────────────────┴───────────────┐
+                          │ Android app (in adler-md-landing/android)
+                          │ WebView wrapper of the CRM       │
+                          └──────────────────────────────────┘
+
+ The CRM (Next.js 15 on Vercel)
+   ├── Clerk ............ sign-in for staff (Google/Apple/Microsoft etc.)
+   ├── Neon Postgres .... all application data (Prisma ORM)
+   ├── Google Drive ..... every document, attachment, receipt, passport (service account)
+   ├── Gmail SMTP/IMAP .. outbound notifications; inbound email intake polling
+   ├── WhatsApp (Meta) .. inbound webhook intake
+   ├── Gemini API ....... medical summaries, intake matching, receipt reading
+   └── Vercel cron ...... 3 daily jobs
 ```
 
-| Piece | Where it lives | Evidence in this repo |
+| Layer | Provider | Evidence |
 |---|---|---|
-| Landing page (`adler-md.com`) | This repo, root: `index.html`, `style.css`, `_headers` | `_headers` header comment: "Cloudflare response headers for the static assets Worker serving this site" |
-| Hatzolah Air CRM (web) | `app.hatzolahair.org.il` | Links in `index.html`, `Config.kt` |
-| Android app | This repo, `android/` | Kotlin project, GitHub Actions workflow |
-| Authentication for the CRM | **Clerk** (Google / Apple / Microsoft sign-in through Clerk) | `Config.kt` allow-list of auth domains |
-| Database | Neon (Postgres) per Aron | **[UNKNOWN]** not referenced in this repo |
-| App hosting | Vercel per Aron | **[UNKNOWN]** not referenced in this repo; the landing page is on Cloudflare, not Vercel |
-| DNS / domain | Cloudflare per Aron | **[UNKNOWN]** which zones: `adler-md.com`, `hatzolahair.org.il`? who is the registrar? |
+| CRM hosting | Vercel (project `hatzolah-air-crm`) | `apps/web/vercel.json`, README "Domain setup", CI comments |
+| CRM domain | `app.hatzolahair.org.il`, A record `76.76.21.21` at the org's DNS registrar | README [docs] |
+| Old domain | `app.adler-md.com` retired; middleware 308-redirects pages, leaves `/api/*` alone | `middleware.ts` [code] |
+| Database | Neon Postgres, `eu-central-1`, one database, pooled + direct URLs | `docs/database-defense-in-depth.md` [docs] |
+| Auth | Clerk | `packages/auth` [code] |
+| Landing page | Cloudflare Workers static assets | `_headers` in landing repo [code] |
+| Mail | Gmail SMTP using `CRM@hatzolahair.org.il` app password; Resend fallback | `.env.example` [code] |
 
-Note the two domains: `adler-md.com` (Aaron Adler's portal) and
-`hatzolahair.org.il` (the organisation's CRM). The CRM link was moved between them
-in commits `39e8b58` → `9f68100`. The Android app still trusts `*.adler-md.com`
-"because Clerk may still be configured on it" (`Config.kt`).
+Note: Cloudflare hosts the landing page only. Whether the *CRM's* DNS is also in
+Cloudflare is **[verify]**; the README only says "the registrar managing
+hatzolahair.org.il's DNS".
 
----
+## 2. CRM repo layout [code]
 
-## 2. The landing page (`/`)
+Turborepo + pnpm 10 workspaces, Node ≥ 20, TypeScript.
 
-- Pure static HTML/CSS, **no JavaScript at all**. 4 cards: ER Chart, Doctor Notes,
-  Hatzolah Air CRM, ER Scheduler. Each is just an `<a href>` to a subdomain.
-- Only external resource: Google Fonts (Inter).
-- Deployed by Cloudflare Workers static assets. `.assetsignore` keeps `android/` and
-  `.github/` (and now `docs/`) **out** of the public site, otherwise they would be
-  downloadable by anyone at `adler-md.com/android/...`.
-- `_headers` sets a strict security posture: `Content-Security-Policy` with
-  `script-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`. This is good; **if you
-  ever add JS, tighten/adjust CSP deliberately**, don't just loosen it.
-- How deploys happen: **[UNKNOWN]** presumably Cloudflare's Git integration on this
-  repo (push to `main` → deploy). Confirm in Cloudflare → Workers & Pages.
+```
+apps/web        ← the ONLY deployed app: Next.js 15 App Router, 110 API route files
+apps/family|escort|landing   ← empty stubs, never deployed (ignore)
+packages/db     ← Prisma schema (45 models), migrations (SQL), audit log, ID generation, durable jobs
+packages/auth   ← Clerk session helpers + role/capability functions (+ unit tests)
+packages/config ← shared TS/ESLint config
+scripts/        ← one-off Node/TS scripts (several touch the production DB, see §5)
+eval/           ← scaffold for AI regression evaluation (not populated)
+docs/           ← hardening docs written by earlier Claude Code sessions
+```
 
-## 3. The Hatzolah Air CRM (what we know)
+Route groups in `apps/web/src/app`:
 
-From the Android README and the landing-page card text. Everything here is
-secondhand until we see the source:
+| Group | Auth | Purpose |
+|---|---|---|
+| `(auth)` | public | Clerk sign-in/up |
+| `(internal)` | Clerk session + role | Dashboard, cases, inquiries, intake, equipment, logistics, staff, finance, settings, admin, tools |
+| `(flight-day-staff)` | Clerk, incl. `FLIGHT_DAY` partner role | Flight Day booking board |
+| `/portal/[token]` | token only | Family consent + attachments |
+| `/escort/[token]` | token **and** staff session | Escort PCR, checklist, expenses, equipment |
+| `/logistics/[token]` | token only | Equipment stock editing |
+| `/sign/[token]` | token only | Document signing |
+| `/request`, `/flight-day`, `/onboarding`, `/flight-day-access` | public / sign-up | Public inquiry form, donor signup, staff onboarding, partner access request |
 
-- Medical mission intake, patient **case management**, inquiries, missions and
-  pricing, generated documents (MEDIF, Fit-to-Fly, agreements, PDFs/CSVs), staff,
-  equipment, logistics, "Flight Day", tools, settings and admin.
-- Public-ish **portals** reached through emailed links: family, escort, logistics
-  and document-signing portals (no full login, presumably token links).
-- Routes seen: `/dashboard` (start page). Native tabs map to Dashboard, Cases,
-  Inquiries, Intake, More.
-- Auth: Clerk; the app contains an allow-list for `*.accounts.dev` /
-  `*.clerk.accounts.dev`, which is what **Clerk development instances** use.
-  Either dev-mode Clerk is still in use or that entry is a leftover. **Verify: a
-  production CRM holding patient data should be on a Clerk *production* instance.**
+## 3. Core domain model
 
-Data handled is medical/personal (patients, families, documents). Treat the whole
-system as regulated-grade data (Israeli Privacy Protection Law; HIPAA/GDPR
-expectations may apply depending on patients).
+- **Inquiry** (public form) → staff convert → **Case** (+ `Patient`, `Contact`,
+  `Task`, `CaseAttachment`, `Document`, `Expense`, `CommunicationLog`).
+- **Mission planning**: `MissionScenario` → `MissionLeg`/`MissionPayload`/
+  `CostLineItem` → `MissionCalculation`; fleet in `Aircraft` + effective-dated
+  configuration/cost profile; `Airport` (~10k rows), `AirportServiceQuote`,
+  `AirspaceRestriction`. Economics are gated by `canViewMissionEconomics`.
+- **People/access**: `User` (role + positions + `flightDayManager`),
+  `MedicalCredential` (review status), `UserSignature`, `PortalToken`,
+  `SigningRequest`.
+- **Ops**: equipment catalog/units/stock/checklists, escort mission checklist, PCR.
+- **Finance** (admin only): `FinanceEntry`/`FinanceAttachment`, Excel import/export,
+  AI receipt scanning.
+- **Flight Day**: `FlightDayBooking`/`FlightDayPassenger` (public donor signups with
+  passport uploads).
+- **Governance**: `AuditLog`, `ExternalJob` (retry queue), `Setting`,
+  `UserDeletionRequest`.
 
-**[UNKNOWN – Aron to fill in]** Framework (Next.js?), ORM/migrations, API shape,
-file storage for documents/attachments (Neon doesn't store files — where are
-PDFs/photos?), email sender, cron jobs, env var list (names only), roles/permissions
-model, backups.
+Roles (hierarchy in `packages/auth/src/server.ts`): `ADMIN 100 > MEDICAL_DIRECTOR 80
+> COORDINATOR 60 > ESCORT 40 > READ_ONLY 10 > FLIGHT_DAY 5`. New sign-ups are created
+`READ_ONLY` + `isActive:false` until an Admin approves. An Admin can "view as"
+another role via a cookie, honored only when the stored role is ADMIN, so it can only
+narrow access [code].
 
-## 4. The Android app (`android/`)
+## 4. Key flows
 
-A single-Activity Kotlin app (~1,600 lines) that hosts the CRM in a `WebView`.
-Package `il.org.hatzolahair.crm`, minSdk 26, target/compile 35.
+1. **Public inquiry**: `POST /api/inquiries`: honeypot, 5/hr/IP (DB-counted),
+   validation + magic-byte file checks → `Inquiry` + Drive upload → staff email.
+2. **Case folder**: created via `ExternalJob` with exponential backoff, daily retry
+   cron, human attention after 5 failures.
+3. **Documents**: generators (MEDIF fillable PDFs for El Al/Emirates/Condor, Fit-to-Fly,
+   agreements, quote, medical summary) → HTML/PDF → Drive. Medical-summary Markdown is
+   rendered with `marked` then allowlist-sanitized (`sanitize-html`) before saving.
+4. **Signing**: staff send a `SigningRequest`; signer opens `/sign/[token]`; a
+   signature is only recorded if the signed copy was stored.
+5. **Intake**: IMAP poll (daily cron) and WhatsApp webhook (HMAC signature verified)
+   → `IntakeItem`; Gemini proposes the matching case.
+6. **Portal tokens**: 256-bit random, only the SHA-256 hash is stored (`PortalToken.token`),
+   with expiry, revocation, usage counters, and audit entries. Escort links also
+   require a case-relevant staff session (`canAccessEscortPortal`).
 
-| File | Responsibility |
-|---|---|
-| `Config.kt` | `HOST = app.hatzolahair.org.il`, start path, lock grace (30 s), and `isInternal()`: which URLs stay in the WebView vs. open in a Custom Tab |
-| `MainActivity.kt` (832 lines) | WebView setup, link routing, native bottom tab bar kept in sync with the page URL, pull-to-refresh, error/offline screen, file chooser + camera, downloads, biometric lock, `FLAG_SECURE` |
-| `MoreSheet.kt` | "More" bottom sheet (New case, Staff, Equipment, Logistics, Flight Day, Tools, Settings, Admin) |
-| `FileTransfer.kt` | Downloads (uses the WebView's cookies), base64 blob saving, camera photo downsizing to 2200 px; files kept in private cache, wiped each launch |
-| `Prefs.kt` | Small settings store (lock on/off, hide-in-screenshots) |
+## 5. Where this system is fragile or risky
 
-Key design decision: **nothing from the CRM is re-implemented**. All features come
-from the website, so the app can't drift from the web app.
+Severity is my judgement from reading the code; no penetration test has been done.
+Ordered by what I'd fix first.
 
-Security-relevant behaviours already built in: cleartext traffic off, backups off,
-`allowFileAccess=false`, mixed content blocked, WebView debugging only in debug
-builds, unknown URL schemes (`intent:`, `file:`) refused, screenshots/recents
-hidden, optional biometric lock, cache wipe, sign-out clears cookies.
+### Critical: operational foot-guns for a new contributor
+1. **There is no development database.** Local dev, `pnpm db:migrate`
+   (`prisma migrate dev`), `pnpm db:seed` and one-off scripts all use whatever
+   `DATABASE_URL` is in `.env.local`, which in practice is **production** [docs +
+   code]. `scripts/reset-and-seed-demo-data.ts` **deletes every case, patient,
+   inquiry, expense, audit log and all staff except one admin account** (its
+   `--dry-run` flag is opt-in, not the default). `prisma migrate dev` can also
+   prompt to reset a drifted database. **Do not run any DB command until a separate
+   Neon branch exists for development.** Recommended: a Neon branch per developer;
+   guard scripts so they refuse to run unless an explicit `ALLOW_DESTRUCTIVE=1`
+   is set and the host isn't the prod endpoint; make dry-run the default.
+2. **The runtime app role is the database owner** (`neondb_owner` for both
+   `DATABASE_URL` and `DATABASE_DIRECT_URL`) [docs]. Any leaked env var, SQL injection
+   or dependency compromise gives full DDL/drop rights. Create a restricted runtime
+   role (DML only) and keep the owner role for migrations only. Plan: Neon branch →
+   create role + grants → run test suite and smoke test → cut over in Vercel.
+3. **Clerk was a development instance in production** (`pk_test_…`,
+   `clerk.accounts.dev`) as of 2026-08-24 [docs], and the Android app still
+   whitelists `*.accounts.dev` [code], which suggests it still is. Migration notes
+   are in `docs/clerk-production-migration.md`. The key trap: `syncClerkUser()`
+   matches on `clerkId` only, so after switching instances every existing staff member
+   would get a new `READ_ONLY`, inactive row and be locked out of their real one.
+   Ship the email-fallback fix (or pre-map IDs) **before** switching keys. No MFA is
+   enforced for any role [docs]. Require it at least for ADMIN and MEDICAL_DIRECTOR.
+   Also: deactivating a user in the CRM does not revoke their Clerk sessions;
+   `getSessionUser()` re-checks `isActive` on each request, which mitigates this for
+   API/page access [code].
+4. **No enforced review gate.** Branch protection is unavailable on a private repo
+   under the free plan [docs]. CI runs lint/typecheck/test/build but nothing forces
+   it to pass before merge, and Vercel likely deploys `main` on push regardless
+   **[verify in Vercel → Git settings]**. Fix: GitHub organization or Pro, then require
+   PRs + the `ci` check on `main`. The repo has had effectively one human author and
+   AI-authored PRs; a second human reviewer is the single biggest control you can add.
 
-### Build and release
+### High: data protection and compliance
+5. **Patient data goes to Google Gemini** (medical records, discharge summaries,
+   imaging, receipts, intake messages) [code]. Confirm the API key is on a paid tier /
+   terms that exclude training on prompts, that this is covered in the privacy policy
+   and consent text, and that this is compliant with the Israeli Privacy Protection
+   Law and its data-security regulations. The model alias is `gemini-flash-latest`, so
+   behavior can change without a deploy.
+6. **Google Drive is the document store** [code]. Everything (records, passports,
+   signed documents) lives in Drive, referenced by URL in the DB. Review the service
+   account's scope, folder sharing settings, who in the Workspace can see these
+   folders, and retention (Flight Day passports have no retention policy [docs]).
+7. **Backups**: Neon PITR window and a tested restore are unconfirmed [docs]. Do one
+   restore drill into a new branch. Drive content is not backed up by Neon at all.
+8. **Family portal and signing links are bearer tokens with no second factor**
+   [code]: anyone holding the link sees the case data it exposes until it expires.
+   Reasonable for the use case, but confirm expiry defaults, that links are not
+   logged by email gateways/WhatsApp previews, and that the data returned is
+   minimized (PROJECT_STATE lists "data minimization" as not done).
+9. **Logistics link** lasts 365 days, edits equipment stock, old links are not retired
+   when new ones are issued, and the stored `scope` is not enforced [docs + code].
 
-`.github/workflows/android-apk.yml` runs on every push touching `android/**` (or
-manually): JDK 17 → Android SDK → `lintDebug` → `assembleDebug assembleRelease` →
-uploads APKs as a GitHub Actions artifact named `hatzolah-air-crm-apk`.
-Signing uses repo secrets `HAI_KEYSTORE_B64`, `HAI_KEYSTORE_PASSWORD`,
-`HAI_KEY_ALIAS`, `HAI_KEY_PASSWORD`. **If those are not set, the release APK is
-signed with the debug key.** Distribution is sideloading (not Play Store).
+### Medium: application security
+10. **Authorization is per-route and manual**, not centralized: middleware only checks
+    "has a Clerk session" (and a public allowlist); each of 110 route files must call
+    `getSessionUser()`/`requireRole()`/a capability helper itself [code]. A forgotten
+    check silently becomes an IDOR. My heuristic scan found only intended exceptions
+    (health, onboarding, flight-day-access, flight-day/slots; finance routes use
+    `requireFinanceUser`). Add a test that enumerates every `route.ts` and fails
+    unless it either calls an approved guard or is on an explicit public allowlist,
+    and add case-level ownership checks tests (can a COORDINATOR open another
+    coordinator's case?). Intended behavior needs a product decision.
+11. **No Content-Security-Policy on the CRM** (other headers and HSTS preload are
+    set) [code]; PROJECT_STATE lists this as pending. The landing page has a strict
+    one. Start with Report-Only.
+12. **Rate limiting is ad hoc**: DB-counted per-IP limits on `/api/inquiries` and Flight
+    Day creation; nothing evident on `/api/onboarding`, `/flight-day-access`, token
+    endpoints, WhatsApp webhook, or login. Use Vercel Firewall/WAF rules or an edge
+    limiter; Cloudflare in front would also help.
+13. **Secret comparison**: cron `Bearer` secret and WhatsApp verify token use plain
+    `===`/`!==` [code]. Low practical risk, trivial fix: `crypto.timingSafeEqual`.
+    The cron routes fail closed when the secret is unset, which is good.
+14. **Vercel limits**: the 4.5 MB request-body limit is worked around by one-file-per-
+    request uploads; base64 data URLs are still used in `/api/onboarding`. Function
+    timeouts on the Hobby plan (10 s default) are a risk for Gemini/PDF work
+    **[verify]**.
+15. **`dangerouslySetInnerHTML`** appears once (`EscortPCRClient.tsx:957`) but only
+    receives hard-coded section titles. Benign today; replace with JSX so a future
+    dynamic title can't become an XSS sink.
+16. **Dependencies and supply chain**: no Dependabot, `npm audit`/OSV step, secret
+    scanning or SAST in CI; GitHub Actions pinned by tag not SHA. I grepped the working
+    tree for obvious secret patterns (private keys, Neon URLs, Clerk/Google keys) and
+    found none; git history was not scanned (the clone is shallow). Run a full-history
+    scan (e.g. gitleaks/trufflehog) as part of onboarding.
+17. **Testing**: Vitest unit tests exist for validation/helpers; no integration or e2e
+    tests, so no regression net around authorization or the DB layer. AI evaluation
+    set is not built.
 
----
+### Android app (adler-md-landing/android) [code]
+- WebView wrapper with a download JS bridge exposed to every page it loads, and an
+  allowlist that trusts broad wildcard domains (`*.accounts.dev`, `*.google.com`,
+  `*.youtube.com`, `*.live.com`, `*.apple.com`, `*.adler-md.com`). Once Clerk is on a
+  production instance, narrow this to exact hostnames.
+- It spoofs the user agent and drops `X-Requested-With` to get past Google's block on
+  embedded sign-in, and accepts third-party cookies.
+- Release builds are signed with the debug key unless the four `HAI_KEYSTORE_*`
+  secrets are set. Distribution is by sideloading APKs from CI artifacts.
+- Needs `/.well-known/assetlinks.json` on the CRM domain for verified app links
+  **[verify]**.
 
-## 5. Environments, accounts, secrets (checklist to complete)
+### What is already good [code]
+Hashed, expiring, revocable portal tokens with audit logging; server-side audit log;
+Zod validation across routes; magic-byte upload checks and filename sanitization;
+HTML-escaping in emails and AI output sanitization; serializable transactions for seat
+booking; fail-closed cron auth; HMAC-verified WhatsApp webhook; HSTS and other
+headers; no raw SQL except three fixed queries; `.env*` ignored; durable retry queue;
+CI on every push; honest documentation of known gaps.
 
-| Service | Role | Owner today | Pinhas access needed |
-|---|---|---|---|
-| GitHub | Source, CI, Android build secrets | Aron (personal account) | Collaborator → better: org + Owner |
-| Cloudflare | DNS, landing-page Worker, maybe more | Aron | Super Administrator |
-| Vercel | CRM hosting (per Aron) | Aron, plan: Hobby | Needs Pro + team to add members |
-| Neon | Postgres | Aron | Org Admin |
-| Clerk | Authentication | **[UNKNOWN]** | Admin on the Clerk app |
-| Registrar | Domain ownership | **[UNKNOWN]** | Account access or transfer |
-| Email provider (CRM emails) | **[UNKNOWN]** | | |
-| File storage for documents | **[UNKNOWN]** | | |
+## 6. Day-one checklist for Pinhas
 
-Secrets that exist (names only, values never go in the repo or in chat):
-the four `HAI_KEYSTORE_*`/`HAI_KEY_*` GitHub secrets; Neon connection string,
-Clerk keys, email/API keys **[UNKNOWN – list the Vercel env var names]**.
+1. Get access (GitHub, Vercel, Neon, Clerk, Cloudflare, Google Workspace/Drive): see
+   the separate access guide. Enable 2FA everywhere.
+2. **Before touching any data**: create a Neon branch (or separate project) for
+   development and put *its* URLs in `apps/web/.env.local`. Never use the production
+   URLs locally.
+3. `pnpm install`; `pnpm --filter @hai/db run generate`; `pnpm typecheck`; `pnpm test`.
+4. Run a full-history secret scan on both repos. Rotate anything found.
+5. Review Vercel project settings: Git branch deploy rules, env var list (names only),
+   team plan, regions, function limits, firewall; Clerk instance type, sign-up rules
+   and MFA; Neon backup window and roles; Google service account permissions.
+6. Agree the PR workflow (§7) and turn on branch protection.
 
-## 6. Observations and first fixes Pinhas should look at
+## 7. Working agreement (proposal)
 
-These are from reading this repo only; severity is my judgement, not a pentest.
+- Everyone, including Aron, works on branches and opens PRs against `main`; the other
+  person reviews. CI must pass. Nobody pushes directly to `main`.
+- Schema changes: write the migration SQL, apply it to a Neon branch first, then run
+  `prisma migrate deploy` on production **before** deploying code that needs it (the
+  repo has hit this ordering already).
+- No secrets in git, chats or screenshots. Production credentials only live in Vercel
+  env vars and the people's password managers.
+- Two Owners on every service. Keep `docs/` and `PROJECT_STATE.md` current.
 
-1. **WebView trusts broad wildcard domains** (`Config.isInternal`):
-   `*.accounts.dev`, `*.google.com`, `*.youtube.com`, `*.live.com`, `*.apple.com`,
-   `*.adler-md.com`, etc. stay inside the WebView, and the WebView exposes a
-   JavaScript bridge (`DownloadBridge.save()`) to every page it loads. The bridge
-   only acts when the app just asked for a blob (`awaitingBlob`), which limits it,
-   but `*.accounts.dev` is a multi-tenant domain anyone can register under. Narrow
-   it to the exact Clerk hostnames in use and consider restricting the bridge by
-   origin (`WebViewCompat.addWebMessageListener` with an allowed-origin set).
-2. **Third-party cookies accepted** (`setAcceptThirdPartyCookies(web, true)`) and
-   the user agent / `X-Requested-With` header are altered to get past Google's
-   embedded-WebView block. Google's policy discourages OAuth in embedded WebViews;
-   a Custom Tab / Credential Manager flow would be the proper long-term fix.
-3. **Release APK may be signed with the debug key** if the secrets aren't set. Debug
-   keys are public knowledge; anyone could produce an update that installs over it.
-   Create and safely back up a real keystore; verify the secrets exist.
-4. **Clerk development instance** possibly in use (see §3). Verify.
-5. **CI hygiene:** GitHub Actions are pinned by tag (`@v4`), not commit SHA; no
-   `CODEOWNERS`, no branch protection documented, no Dependabot config, no secret
-   scanning evidence; lint is `abortOnError = false` so lint errors never fail the
-   build; dependencies are pinned but unmonitored.
-6. **Deep-link verification** needs `/.well-known/assetlinks.json` on
-   `app.hatzolahair.org.il` (README says so). Check it exists and matches the real
-   signing certificate fingerprint, otherwise app links silently fall back to the
-   browser.
-7. **No tests anywhere** in this repo.
-8. The real security work (authorization on every API route, tenant/case-level
-   access, portal-token entropy and expiry, document storage ACLs, audit logs,
-   rate limiting, backups, database roles, PII retention) is in the **CRM repo,
-   which I have not seen**.
+## 8. Open questions for Aron (please answer so this doc can be finalized)
 
-## 7. Working agreement (suggested)
-
-- `main` is protected: changes go through pull requests; Pinhas reviews Aron's PRs
-  and vice-versa. Nobody pushes to `main` directly.
-- No secrets in git, ever. Use platform env vars; rotate anything that was ever
-  pasted somewhere it shouldn't have been.
-- Each service has at least two Owners (Aron + Pinhas) so nothing depends on one
-  person.
-- Keep this document updated; every **[UNKNOWN]** above should be resolved first.
-
-## 8. Open questions (answer these first)
-
-1. Which repo/deployment holds the CRM code, and is it in a GitHub repo Pinhas can
-   be added to?
-2. Framework, ORM and where migrations live? How is the Neon DB reached
-   (pooled/unpooled URLs), and are there separate dev/prod databases?
-3. Where are uploaded documents/photos stored?
-4. Is Clerk on a production instance? Which sign-in methods and who can sign up?
-5. How are the family/escort/logistics/signing portal links generated and secured?
-6. Who owns the domains at the registrar? Is anything on the Cloudflare account that
-   isn't known to either of you?
-7. Is there any backup/restore procedure for the database, and has it been tested?
+1. Is the Clerk production instance live, or still the development one?
+2. Which Vercel plan, and does `main` auto-deploy? Who else can access Vercel?
+3. Neon: plan, PITR window, any branches, who has access?
+4. Is the CRM's DNS in Cloudflare or at another registrar? Who owns each domain?
+5. Is the Gemini key on a paid tier? Is there a privacy policy / consent text that
+   mentions AI processing?
+6. Which Google account owns the Drive root folders and the service account?
+7. Does anything else (Make/Zapier, Meta WhatsApp app, other webhooks) call the CRM?
