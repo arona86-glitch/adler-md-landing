@@ -12,3 +12,10 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), camera=(), microphone=()
   Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; manifest-src 'none'; worker-src 'none'; frame-ancestors 'none'
+
+# Discharge-instructions module (הנחיות שחרור): same-origin JS and same-origin
+# JSON fetch only. Detach the global CSP and replace it; everything else stays
+# as inherited from /*. No inline script, no third-party connections.
+/discharge-instructions/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; manifest-src 'none'; worker-src 'none'; frame-ancestors 'none'
