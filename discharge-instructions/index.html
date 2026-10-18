@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>הנחיות שחרור | Adler MD</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="discharge.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet" />
+</head>
+<body class="dc-body">
+
+  <header class="header dc-noprint">
+    <div class="header-inner dc-header-inner">
+      <div class="header-logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div>
+          <div class="logo-name">Dr. Aaron Adler, MD</div>
+          <div class="logo-sub">הנחיות שחרור</div>
+        </div>
+      </div>
+      <a class="dc-back" href="/">&rarr; חזרה לפורטל Adler MD</a>
+    </div>
+  </header>
+
+  <main class="main dc-main discharge-module">
+
+    <section class="dc-intro dc-noprint">
+      <h1>הנחיות שחרור</h1>
+      <p class="dc-review" role="note"><strong>נדרשת בדיקה מקצועית:</strong> התבניות הן כלי עזר לשיקול דעת הרופא/ה בלבד. יש להתאים כל טקסט לממצאים, גיל, אלרגיות, מחלות רקע, הריון, תרופות ובדיקות תלויות ועומדות לפני מסירה למטופל/ת.</p>
+    </section>
+
+    <section class="dc-toolbar dc-noprint" aria-label="חיפוש וסינון">
+      <div class="dc-field">
+        <label for="dc-search">חיפוש (אבחנה, תסמין, מילת מפתח או קיצור)</label>
+        <input id="dc-search" type="search" autocomplete="off" placeholder="למשל: סטרפ, תפרים, UTI, COVID-19" />
+      </div>
+      <div class="dc-field">
+        <label for="dc-category">קטגוריה קלינית</label>
+        <select id="dc-category"></select>
+      </div>
+      <button type="button" id="dc-clear" class="dc-btn dc-btn-ghost">ניקוי חיפוש</button>
+    </section>
+
+    <p id="dc-count" class="dc-count dc-noprint" role="status" aria-live="polite"></p>
+    <p id="dc-error" class="dc-error dc-noprint" role="alert" hidden></p>
+
+    <div class="dc-layout">
+      <nav class="dc-results dc-noprint" aria-label="רשימת תבניות">
+        <ul id="dc-list" class="dc-list"></ul>
+        <p id="dc-empty" class="dc-empty" hidden>לא נמצאו תבניות מתאימות. נסו מילת חיפוש אחרת או נקו את הסינון.</p>
+      </nav>
+
+      <article id="dc-detail" class="dc-detail dc-noprint" aria-live="polite" tabindex="-1">
+        <p class="dc-placeholder">בחרו תבנית מהרשימה.</p>
+      </article>
+    </div>
+
+    <details class="dc-sources dc-noprint">
+      <summary>מקורות (לעיון הרופא/ה)</summary>
+      <p class="dc-small">קישורי המקורות מסופקים לעיון קליני בלבד ואינם מהווים אישור או הסמכה של התבניות.</p>
+      <ol id="dc-sources-list"></ol>
+    </details>
+
+    <!-- Print-only sheet, rebuilt from the current working copy -->
+    <section id="dc-print" class="dc-print" aria-hidden="true"></section>
+  </main>
+
+  <footer class="footer dc-noprint">
+    <div class="footer-inner">
+      <div class="footer-lock">התבניות סטטיות ואינן כוללות מידע מזהה. עריכות נשמרות בזיכרון הדף בלבד.</div>
+      <div class="footer-copy">Dr. Aaron Adler, MD &mdash; adler-md.com</div>
+    </div>
+  </footer>
+
+  <script src="discharge-core.js"></script>
+  <script src="discharge.js"></script>
+</body>
+</html>
