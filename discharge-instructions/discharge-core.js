@@ -93,11 +93,20 @@
     return w;
   }
 
-  /* Clean clipboard text: diagnosis, then each non-empty section with single-bullet lines. */
-  function buildCopyText(w) {
+  /* sel: optional { sectionKey: [bool per line] }; missing => everything included. */
+  function isOn(sel, key, i) { return !sel || !sel[key] || sel[key][i] !== false; }
+
+  function selectAll(w, on) {
+    var sel = {};
+    SECTIONS.forEach(function (s) { sel[s.key] = lines(w[s.key]).map(function () { return on; }); });
+    return sel;
+  }
+
+  /* Clean clipboard text: diagnosis, then each section that has selected lines, single-bullet lines. */
+  function buildCopyText(w, sel) {
     var out = [w.diagnosis];
     SECTIONS.forEach(function (s) {
-      var l = lines(w[s.key]);
+      var l = lines(w[s.key]).filter(function (x, i) { return isOn(sel, s.key, i); });
       if (!l.length) return;
       out.push('', s.label, l.map(function (x) { return '• ' + x; }).join('\n'));
     });
@@ -105,7 +114,7 @@
   }
 
   var api = { SECTIONS: SECTIONS, validate: validate, normalize: normalize, search: search,
-              lines: lines, workingCopy: workingCopy, buildCopyText: buildCopyText };
+              lines: lines, workingCopy: workingCopy, buildCopyText: buildCopyText, selectAll: selectAll, isOn: isOn };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.DischargeCore = api;
 })(typeof self !== 'undefined' ? self : this);

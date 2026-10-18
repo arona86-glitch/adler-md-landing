@@ -47,6 +47,12 @@
 .dc-section h3 { font-size: 1.05rem; color: var(--blue-700); margin-bottom: 6px; }
 .dc-bullets { list-style-type: disc; padding-inline-start: 1.5rem; }
 .dc-bullets li { direction: rtl; text-align: right; margin-bottom: 4px; }
+.dc-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dc-selbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.dc-selcount { font-size: .85rem; color: var(--gray-500); }
+.dc-checks { list-style: none; padding-inline-start: 0; }
+.dc-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.dc-check input, .dc-sec-all { width: 18px; height: 18px; margin-top: .3em; flex-shrink: 0; accent-color: var(--blue-600); }
 .dc-warn { background: var(--red-50); border: 1px solid var(--red-100); border-inline-start: 5px solid var(--red-500); border-radius: var(--radius-sm); padding: 10px 14px; }
 .dc-warn h3 { color: #991b1b; }
 bdi[dir="ltr"] { unicode-bidi: isolate; }

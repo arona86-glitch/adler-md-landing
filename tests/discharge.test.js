@@ -64,3 +64,15 @@ test('edited working copy is reflected and original untouched', () => {
   assert.ok(C.buildCopyText(w).includes('• שורה ערוכה'));
   assert.ok(!C.buildCopyText(C.workingCopy(T[0])).includes('שורה ערוכה'));
 });
+
+test('selective copy: only checked lines; empty sections omitted; all/none', () => {
+  const w = C.workingCopy(T[0]);
+  const sel = C.selectAll(w, false);
+  assert.strictEqual(C.buildCopyText(w, sel), w.diagnosis);
+  sel.instructions[1] = true;
+  const txt = C.buildCopyText(w, sel);
+  const l = C.lines(w.instructions);
+  assert.ok(txt.includes('• ' + l[1]) && !txt.includes(l[0]));
+  assert.ok(txt.includes('הנחיות בשחרור') && !txt.includes('מעקב / ביקורת'));
+  assert.strictEqual(C.buildCopyText(w, C.selectAll(w, true)), C.buildCopyText(w));
+});

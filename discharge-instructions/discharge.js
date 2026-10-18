@@ -2,7 +2,7 @@
   'use strict';
   var C = window.DischargeCore;
   var $ = function (id) { return document.getElementById(id); };
-  var data, templates = [], current = null, working = null, editing = false;
+  var data, templates = [], current = null, working = null, editing = false, sel = null;
 
   var LATIN = /[A-Za-z][A-Za-z0-9\-+\/.% ]*[A-Za-z0-9%]|[A-Za-z]/g;
 
@@ -29,13 +29,50 @@
     return e;
   }
 
-  function sectionView(w, s) {
+  /* interactive=true: checkbox per line (screen); false: plain bullets of selected lines (print). */
+  function sectionView(w, s, interactive) {
     var l = C.lines(w[s.key]);
-    if (!l.length) return null;
+    var shown = l.map(function (x, i) { return { x: x, i: i }; })
+      .filter(function (o) { return interactive || C.isOn(sel, s.key, o.i); });
+    if (!shown.length) return null;
     var sec = el('section', 'dc-section' + (s.warn ? ' dc-warn' : ''));
-    sec.appendChild(el('h3', null, s.label));
-    var ul = el('ul', 'dc-bullets');
-    l.forEach(function (x) { ul.appendChild(el('li', null, x)); });
+    var h = el('div', 'dc-sec-head');
+    h.appendChild(el('h3', null, s.label));
+    if (interactive) {
+      var all = document.createElement('input');
+      all.type = 'checkbox';
+      all.className = 'dc-sec-all';
+      all.setAttribute('aria-label', 'בחירת כל השורות בסעיף: ' + s.label);
+      var n = l.filter(function (x, i) { return C.isOn(sel, s.key, i); }).length;
+      all.checked = n === l.length;
+      all.indeterminate = n > 0 && n < l.length;
+      all.addEventListener('change', function () {
+        sel[s.key] = l.map(function () { return all.checked; });
+        renderDetail(); renderPrint();
+      });
+      h.appendChild(all);
+    }
+    sec.appendChild(h);
+    var ul = el('ul', 'dc-bullets' + (interactive ? ' dc-checks' : ''));
+    shown.forEach(function (o) {
+      var li = el('li');
+      if (interactive) {
+        var lab = el('label', 'dc-check');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = C.isOn(sel, s.key, o.i);
+        cb.addEventListener('change', function () {
+          sel[s.key][o.i] = cb.checked;
+          renderDetail(); renderPrint();
+        });
+        lab.appendChild(cb);
+        lab.appendChild(el('span', null, o.x));
+        li.appendChild(lab);
+      } else {
+        appendText(li, o.x);
+      }
+      ul.appendChild(li);
+    });
     sec.appendChild(ul);
     return sec;
   }
@@ -66,6 +103,7 @@
   function select(id, focus) {
     current = templates.filter(function (t) { return t.id === id; })[0];
     working = C.workingCopy(current);
+    sel = C.selectAll(working, true);
     editing = false;
     refresh();
     renderDetail();
@@ -91,7 +129,7 @@
     titles.appendChild(el('h2', null, working.diagnosis));
     head.appendChild(titles);
     var actions = el('div', 'dc-actions');
-    actions.appendChild(btn('העתקת כל ההנחיות', 'dc-btn-primary', copyAll));
+    actions.appendChild(btn(editing ? 'העתקת כל ההנחיות' : 'העתקת הנבחר', 'dc-btn-primary', copyAll));
     actions.appendChild(btn('הדפסה / PDF', 'dc-btn-ghost', function () { renderPrint(); window.print(); }));
     actions.appendChild(btn(editing ? 'סיום עריכה' : 'עריכת ההנחיות', 'dc-btn-ghost', toggleEdit));
     if (editing) actions.appendChild(btn('איפוס למקור', 'dc-btn-ghost', resetOriginal));
@@ -114,14 +152,19 @@
         ta.dir = 'rtl';
         ta.rows = Math.max(3, C.lines(working[s.key]).length + 1);
         ta.value = working[s.key];
-        ta.addEventListener('input', function () { working[s.key] = ta.value; renderPrint(); });
+        ta.addEventListener('input', function () { working[s.key] = ta.value; sel = C.selectAll(working, true); renderPrint(); });
         wrap.appendChild(lab);
         wrap.appendChild(ta);
         box.appendChild(wrap);
       });
     } else {
+      var bar = el('div', 'dc-selbar');
+      bar.appendChild(btn('בחירת הכל', 'dc-btn-ghost', function () { sel = C.selectAll(working, true); renderDetail(); renderPrint(); }));
+      bar.appendChild(btn('ביטול בחירת הכל', 'dc-btn-ghost', function () { sel = C.selectAll(working, false); renderDetail(); renderPrint(); }));
+      bar.appendChild(el('span', 'dc-selcount', countSelected() + ' שורות נבחרו להעתקה'));
+      box.appendChild(bar);
       C.SECTIONS.forEach(function (s) {
-        var v = sectionView(working, s);
+        var v = sectionView(working, s, true);
         if (v) box.appendChild(v);
       });
     }
@@ -133,13 +176,19 @@
     if (!current) return;
     p.appendChild(el('h1', null, working.diagnosis));
     C.SECTIONS.forEach(function (s) {
-      var v = sectionView(working, s);
+      var v = sectionView(working, s, false);
       if (v) p.appendChild(v);
     });
   }
 
-  function toggleEdit() { editing = !editing; renderDetail(); }
-  function resetOriginal() { working = C.workingCopy(current); renderDetail(); renderPrint(); }
+  function countSelected() {
+    var n = 0;
+    C.SECTIONS.forEach(function (s) { C.lines(working[s.key]).forEach(function (x, i) { if (C.isOn(sel, s.key, i)) n++; }); });
+    return n;
+  }
+
+  function toggleEdit() { editing = !editing; sel = C.selectAll(working, true); renderDetail(); renderPrint(); }
+  function resetOriginal() { working = C.workingCopy(current); sel = C.selectAll(working, true); renderDetail(); renderPrint(); }
 
   function setStatus(msg, bad) {
     var s = $('dc-copy-status');
@@ -163,7 +212,8 @@
   }
 
   function copyAll() {
-    var text = C.buildCopyText(working);
+    if (!countSelected()) { setStatus('לא נבחרו שורות להעתקה.', true); return; }
+    var text = C.buildCopyText(working, sel);
     var done = function () { setStatus('ההנחיות הועתקו ללוח.'); };
     var fail = function () { setStatus('ההעתקה נכשלה. סמנו את הטקסט והעתיקו ידנית.', true); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
