@@ -184,6 +184,11 @@ body {
   color: var(--purple-600);
 }
 
+.card-icon--teal {
+  background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+  color: #0d9488;
+}
+
 /* Card body */
 .card-body {
   padding: 0 28px 20px;
